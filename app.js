@@ -1,7 +1,7 @@
 const DB_NAME = 'TomicaCollectorWeb';
 const DB_VERSION = 1;
 const STORE_NAME = 'tomicas';
-const APP_VERSION = '2026-06-10-zxing-v3';
+const APP_VERSION = '2026-06-10-zxing-v4';
 
 const seriesOptions = [
   '一般紅盒',
@@ -673,7 +673,7 @@ async function takePhoto() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=3').then((registration) => {
+  navigator.serviceWorker.register('./sw.js?v=4').then((registration) => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TomicaCollector 更新中</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        background: #f8fafc;
+        color: #111827;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        width: min(88vw, 420px);
+        text-align: center;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 28px;
+      }
+
+      p {
+        color: #64748b;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>TomicaCollector 更新中</h1>
+      <p>正在清除舊版離線快取，完成後會自動進入新版。</p>
+    </main>
+    <script>
+      async function refreshApp() {
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+        }
+
+        if ('caches' in window) {
+          const names = await caches.keys();
+          await Promise.all(names.map((name) => caches.delete(name)));
+        }
+
+        window.location.replace('./index.html?fresh=20260610-zxing-v4');
+      }
+
+      refreshApp().catch(() => {
+        window.location.replace('./index.html?fresh=20260610-zxing-v4');
+      });
+    </script>
+  </body>
+</html>
