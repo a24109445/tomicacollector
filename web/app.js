@@ -1,7 +1,7 @@
 const DB_NAME = 'TomicaCollectorWeb';
 const DB_VERSION = 1;
 const STORE_NAME = 'tomicas';
-const APP_VERSION = '2026-06-10-zxing-v4';
+const APP_VERSION = '2026-06-10-zxing-v5';
 
 const seriesOptions = [
   '一般紅盒',
@@ -34,6 +34,7 @@ const state = {
   detector: null,
   scanTimer: null,
   zxingControls: null,
+  isResolvingScan: false,
 };
 
 const app = document.querySelector('#app');
@@ -254,6 +255,7 @@ async function navigate(screen, options = {}) {
   state.scanStatus = 'idle';
   state.scannedBarcode = '';
   state.scanResult = null;
+  state.isResolvingScan = false;
 
   if (screen === 'list') {
     await refreshList();
@@ -487,7 +489,7 @@ async function renderScanner() {
       <section class="camera-panel">
         <h1 class="card-title">對準 Tomica 外盒條碼</h1>
         <div id="scan-output" class="scan-result">
-          <p class="help">掃描結果會顯示在這裡。若瀏覽器不支援自動辨識，可手動輸入條碼。</p>
+          <p class="help">掃描結果會顯示在這裡。掃到條碼後會自動比對收藏資料。</p>
         </div>
         <div class="field">
           <label class="label" for="manual-barcode">手動輸入條碼</label>
@@ -556,7 +558,7 @@ async function startZxingScanner(video) {
       undefined,
       video,
       async (result, error) => {
-        if (!result) {
+        if (!result || state.isResolvingScan) {
           return;
         }
 
@@ -575,7 +577,7 @@ async function startZxingScanner(video) {
 }
 
 async function scanFrame(video) {
-  if (state.screen !== 'scanner' || !state.detector) return;
+  if (state.screen !== 'scanner' || !state.detector || state.isResolvingScan) return;
 
   if (video.readyState >= 2) {
     try {
@@ -592,8 +594,21 @@ async function scanFrame(video) {
 }
 
 async function handleBarcode(barcode) {
-  state.scannedBarcode = barcode;
-  state.scanResult = await getTomicaByBarcode(barcode);
+  const normalizedBarcode = String(barcode ?? '').replace(/\s/g, '').trim();
+  if (!normalizedBarcode || state.isResolvingScan) {
+    return;
+  }
+
+  state.isResolvingScan = true;
+  state.scannedBarcode = normalizedBarcode;
+
+  const manualInput = app.querySelector('#manual-barcode');
+  if (manualInput) {
+    manualInput.value = normalizedBarcode;
+  }
+
+  stopCamera();
+  state.scanResult = await getTomicaByBarcode(normalizedBarcode);
   state.scanStatus = state.scanResult ? 'found' : 'missing';
   renderScanResult();
 }
@@ -617,9 +632,9 @@ function renderScanResult() {
   }
 
   output.innerHTML = `
-    <p class="missing">尚未收藏</p>
+    <p class="missing">未收藏</p>
     <p class="meta">條碼：${escapeHtml(state.scannedBarcode)}</p>
-    <button class="button primary full" data-action="add-missing">新增收藏</button>
+    <button class="button primary full" data-action="add-missing" type="button">新增收藏</button>
   `;
   output.querySelector('[data-action="add-missing"]').addEventListener('click', () =>
     navigate('form', { barcode: state.scannedBarcode })
@@ -673,7 +688,7 @@ async function takePhoto() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=4').then((registration) => {
+  navigator.serviceWorker.register('./sw.js?v=5').then((registration) => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }
