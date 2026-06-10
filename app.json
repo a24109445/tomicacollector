@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "TomicaCollector",
+    "slug": "tomicacollector",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.tomicacollector.app",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "允許 TomicaCollector 使用相機掃描條碼與拍攝收藏照片"
+      }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "允許 TomicaCollector 使用相機掃描條碼",
+          "barcodeScannerEnabled": true
+        }
+      ],
+      "expo-sqlite"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4331979c-8a35-4889-9daf-9a6a4449b7f0"
+      }
+    }
+  }
+}

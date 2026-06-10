@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#d71920"/>
+  <rect x="74" y="224" width="364" height="108" rx="28" fill="#fff"/>
+  <path d="M130 224l44-70h152l60 70z" fill="#fff"/>
+  <circle cx="164" cy="340" r="38" fill="#111827"/>
+  <circle cx="348" cy="340" r="38" fill="#111827"/>
+  <circle cx="164" cy="340" r="15" fill="#fff"/>
+  <circle cx="348" cy="340" r="15" fill="#fff"/>
+  <text x="256" y="198" text-anchor="middle" font-size="54" font-family="Arial, sans-serif" font-weight="800" fill="#fff">TC</text>
+</svg>
