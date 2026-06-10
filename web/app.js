@@ -652,7 +652,12 @@ async function startZxingScanner(video) {
 }
 
 async function scanFrame(video) {
-  if (state.screen !== 'scanner' || !state.detector || state.isResolvingScan) return;
+  if (state.screen !== 'scanner' || !state.detector) return;
+
+  if (state.isResolvingScan) {
+    state.scanTimer = requestAnimationFrame(() => scanFrame(video));
+    return;
+  }
 
   if (video.readyState >= 2) {
     try {
