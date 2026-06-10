@@ -170,7 +170,7 @@ npm run build:ios:production
 
 ## 9. 網頁版 TomicaCollector
 
-網頁版放在 `web/`，不依賴 Expo Go。功能包含收藏列表、新增/編輯/刪除、搜尋、條碼查詢、相機掃描、拍攝照片、系列下拉選單、持有數量下拉選單、車貼勾選、匯出 JSON 備份、匯入 JSON 備份。
+網頁版放在 `web/`，不依賴 Expo Go。功能包含收藏列表、新增/編輯/刪除、搜尋、條碼查詢、ZXing 自動條碼辨識、相機掃描、拍攝照片、系列下拉選單、持有數量下拉選單、車貼勾選、匯出 JSON 備份、匯入 JSON 備份。
 
 本機測試：
 
@@ -196,6 +196,7 @@ iPhone 使用注意：
 
 - iPhone Safari 的相機功能需要 HTTPS 網址，不能只用一般區網 HTTP。
 - 部署到 GitHub Pages、Netlify、Vercel 等 HTTPS 靜態網站後，iPhone 才能使用網頁相機掃描/拍照。
+- 條碼自動辨識使用本機快取的 ZXing library，不依賴 Safari 原生 `BarcodeDetector`。
 - 開啟 HTTPS 網址後，可在 Safari 分享選單選「加入主畫面」，之後能像 App 一樣從主畫面打開。
 - Service Worker 會快取網頁檔案；載入過一次後，基本頁面可離線開啟。
 

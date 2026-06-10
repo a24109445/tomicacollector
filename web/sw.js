@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tomicacollector-web-v1';
+const CACHE_NAME = 'tomicacollector-web-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const ASSETS = [
   './app.js',
   './manifest.webmanifest',
   './icon.svg',
+  './vendor/zxing-browser.min.js',
 ];
 
 self.addEventListener('install', (event) => {

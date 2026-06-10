@@ -16,6 +16,8 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.0",
+    "@zxing/browser": "^0.2.0",
+    "@zxing/library": "^0.22.0",
     "expo": "~54.0.0",
     "expo-camera": "~17.0.0",
     "expo-sqlite": "~16.0.0",
