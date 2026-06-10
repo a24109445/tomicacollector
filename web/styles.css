@@ -57,6 +57,12 @@ button {
   font-size: 14px;
 }
 
+.version {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .toolbar,
 .row {
   display: flex;
