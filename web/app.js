@@ -1,7 +1,7 @@
 const DB_NAME = 'TomicaCollectorWeb';
 const DB_VERSION = 1;
 const STORE_NAME = 'tomicas';
-const APP_VERSION = '2026-06-10-zxing-v6';
+const APP_VERSION = '2026-06-11-zxing-v7';
 
 const seriesOptions = [
   '一般紅盒',
@@ -36,6 +36,7 @@ const state = {
   scanTimer: null,
   zxingControls: null,
   isResolvingScan: false,
+  lastRenderedItemsKey: '',
 };
 
 const app = document.querySelector('#app');
@@ -297,6 +298,7 @@ function renderList() {
     <main class="app">
       ${renderHeader('TomicaCollector', '網頁版，本機 IndexedDB 收藏管理')}
       <p class="version">版本：${APP_VERSION}</p>
+      <p class="help">純離線資料存在目前開啟方式的本機資料庫。Safari 網頁版與加入主畫面的 PWA 可能是不同資料庫，請以主畫面版為主，或用匯出/匯入備份搬移資料。</p>
       <div class="toolbar">
         <button class="button primary" data-action="add">新增收藏</button>
         <button class="button" data-action="scan">掃描條碼</button>
@@ -307,15 +309,10 @@ function renderList() {
       </div>
       <input class="hidden" id="backup-file" type="file" accept="application/json,.json" />
       <input class="search" id="search" value="${escapeHtml(state.query)}" placeholder="搜尋車名、編號、條碼、系列" />
-      <section class="${state.items.length ? 'list' : 'empty'}">
-        ${
-          state.items.length
-            ? state.items.map(renderCard).join('')
-            : '<p>目前沒有收藏，先新增或掃描一台 Tomica。</p>'
-        }
-      </section>
+      <section id="collection-list"></section>
     </main>
   `;
+  renderCollectionList();
 
   app.querySelector('[data-action="add"]').addEventListener('click', () => navigate('form'));
   app.querySelector('[data-action="scan"]').addEventListener('click', () => navigate('scanner'));
@@ -340,12 +337,23 @@ function renderList() {
   app.querySelector('#search').addEventListener('input', async (event) => {
     state.query = event.target.value;
     await refreshList();
-    renderList();
+    renderCollectionList();
   });
-  app.querySelectorAll('[data-edit]').forEach((button) =>
+}
+
+function renderCollectionList() {
+  const list = app.querySelector('#collection-list');
+  if (!list) return;
+
+  list.className = state.items.length ? 'list' : 'empty';
+  list.innerHTML = state.items.length
+    ? state.items.map(renderCard).join('')
+    : '<p>目前沒有收藏，先新增或掃描一台 Tomica。</p>';
+
+  list.querySelectorAll('[data-edit]').forEach((button) =>
     button.addEventListener('click', () => navigate('form', { id: button.dataset.edit }))
   );
-  app.querySelectorAll('[data-delete]').forEach((button) =>
+  list.querySelectorAll('[data-delete]').forEach((button) =>
     button.addEventListener('click', async () => {
       const item = await getTomicaById(button.dataset.delete);
       if (confirm(`確定刪除「${item.name}」？`)) {
@@ -504,7 +512,7 @@ async function renderScanner() {
           <input class="input" id="manual-barcode" inputmode="numeric" />
         </div>
         <div class="toolbar">
-          <button class="button" data-action="manual">查詢條碼</button>
+          <button class="button" data-action="continue-scan">繼續掃描</button>
           <button class="button" data-action="back">返回列表</button>
         </div>
       </section>
@@ -512,9 +520,15 @@ async function renderScanner() {
   `;
 
   app.querySelector('[data-action="back"]').addEventListener('click', () => navigate('list'));
-  app.querySelector('[data-action="manual"]').addEventListener('click', async () => {
-    const value = app.querySelector('#manual-barcode').value.trim();
-    if (value) await handleBarcode(value);
+  app.querySelector('[data-action="continue-scan"]').addEventListener('click', async () => {
+    await restartScanner();
+  });
+  app.querySelector('#manual-barcode').addEventListener('keydown', async (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const value = event.currentTarget.value.trim();
+      if (value) await handleBarcode(value);
+    }
   });
 
   await startScanner();
@@ -615,11 +629,20 @@ async function handleBarcode(barcode) {
     manualInput.value = normalizedBarcode;
   }
 
-  stopCamera();
   state.scanDbCount = (await getAllTomicas()).length;
   state.scanResult = await getTomicaByBarcode(normalizedBarcode);
   state.scanStatus = state.scanDbCount > 0 && state.scanResult ? 'found' : 'missing';
   renderScanResult();
+}
+
+async function restartScanner() {
+  stopCamera();
+  state.scanStatus = 'idle';
+  state.scannedBarcode = '';
+  state.scanResult = null;
+  state.scanDbCount = 0;
+  state.isResolvingScan = false;
+  renderScanner();
 }
 
 function renderScanResult() {
