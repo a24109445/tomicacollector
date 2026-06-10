@@ -1,7 +1,8 @@
-const CACHE_NAME = 'tomicacollector-web-v3';
+const CACHE_NAME = 'tomicacollector-web-v4';
 const ASSETS = [
   './',
   './index.html',
+  './fresh.html',
   './styles.css',
   './app.js',
   './manifest.webmanifest',
