@@ -32,6 +32,7 @@ const state = {
   stream: null,
   detector: null,
   scanTimer: null,
+  zxingControls: null,
 };
 
 const app = document.querySelector('#app');
@@ -216,6 +217,11 @@ async function importBackup(file) {
 }
 
 function stopCamera() {
+  if (state.zxingControls) {
+    state.zxingControls.stop();
+    state.zxingControls = null;
+  }
+
   if (state.scanTimer) {
     cancelAnimationFrame(state.scanTimer);
     state.scanTimer = null;
@@ -505,6 +511,11 @@ async function renderScanner() {
 async function startScanner() {
   const video = app.querySelector('#scan-video');
 
+  if (window.ZXingBrowser?.BrowserMultiFormatReader) {
+    await startZxingScanner(video);
+    return;
+  }
+
   try {
     state.stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' } },
@@ -524,6 +535,40 @@ async function startScanner() {
   } catch (error) {
     app.querySelector('#scan-output').innerHTML =
       '<p class="missing">無法開啟相機</p><p class="help">iPhone 網頁相機需要 HTTPS 網址。請部署到 HTTPS 網站，或使用下方手動輸入條碼。</p>';
+  }
+}
+
+async function startZxingScanner(video) {
+  const output = app.querySelector('#scan-output');
+  output.innerHTML =
+    '<p class="help">自動條碼辨識啟動中，請將條碼放在畫面中央並保持穩定。</p>';
+
+  try {
+    const reader = new window.ZXingBrowser.BrowserMultiFormatReader(undefined, {
+      delayBetweenScanAttempts: 180,
+      delayBetweenScanSuccess: 900,
+      tryPlayVideoTimeout: 8000,
+    });
+
+    state.zxingControls = await reader.decodeFromVideoDevice(
+      undefined,
+      video,
+      async (result, error) => {
+        if (!result) {
+          return;
+        }
+
+        const text = result.getText();
+        if (!text || text === state.scannedBarcode) {
+          return;
+        }
+
+        await handleBarcode(text);
+      }
+    );
+  } catch (error) {
+    output.innerHTML =
+      '<p class="missing">無法啟動自動條碼辨識</p><p class="help">請確認 Safari 已允許相機權限，並使用 HTTPS 網址。也可以先用下方手動輸入條碼。</p>';
   }
 }
 
