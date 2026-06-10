@@ -1,6 +1,7 @@
 const DB_NAME = 'TomicaCollectorWeb';
 const DB_VERSION = 1;
 const STORE_NAME = 'tomicas';
+const APP_VERSION = '2026-06-10-zxing-v3';
 
 const seriesOptions = [
   '一般紅盒',
@@ -285,6 +286,7 @@ function renderList() {
   app.innerHTML = `
     <main class="app">
       ${renderHeader('TomicaCollector', '網頁版，本機 IndexedDB 收藏管理')}
+      <p class="version">版本：${APP_VERSION}</p>
       <div class="toolbar">
         <button class="button primary" data-action="add">新增收藏</button>
         <button class="button" data-action="scan">掃描條碼</button>
@@ -671,7 +673,9 @@ async function takePhoto() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('./sw.js?v=3').then((registration) => {
+    registration.update().catch(() => {});
+  }).catch(() => {});
 }
 
 await navigate('list');
