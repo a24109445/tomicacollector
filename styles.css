@@ -63,6 +63,21 @@ button {
   font-size: 12px;
 }
 
+.back-button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
 .toolbar,
 .row {
   display: flex;
@@ -270,6 +285,18 @@ button {
 .scan-result {
   display: grid;
   gap: 8px;
+}
+
+.scan-match-list {
+  display: grid;
+  gap: 10px;
+}
+
+.scan-match {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  padding: 10px;
 }
 
 .found {

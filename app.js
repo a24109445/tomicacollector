@@ -1,7 +1,7 @@
 const DB_NAME = 'TomicaCollectorWeb';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'tomicas';
-const APP_VERSION = '2026-06-11-zxing-v7';
+const APP_VERSION = '2026-06-11-zxing-v8';
 
 const seriesOptions = [
   '一般紅盒',
@@ -30,13 +30,15 @@ const state = {
   scanStatus: 'idle',
   scannedBarcode: '',
   scanResult: null,
+  scanMatches: [],
   scanDbCount: 0,
   stream: null,
   detector: null,
   scanTimer: null,
   zxingControls: null,
   isResolvingScan: false,
-  lastRenderedItemsKey: '',
+  lastScanAt: 0,
+  formReturnScreen: 'list',
 };
 
 const app = document.querySelector('#app');
@@ -49,8 +51,14 @@ function openDb() {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
-        store.createIndex('barcode', 'barcode', { unique: true });
+        store.createIndex('barcode', 'barcode', { unique: false });
         store.createIndex('updatedAt', 'updatedAt');
+      } else {
+        const store = request.transaction.objectStore(STORE_NAME);
+        if (store.indexNames.contains('barcode')) {
+          store.deleteIndex('barcode');
+        }
+        store.createIndex('barcode', 'barcode', { unique: false });
       }
     };
 
@@ -87,15 +95,23 @@ async function getTomicaById(id) {
 }
 
 async function getTomicaByBarcode(barcode) {
+  const matches = await getTomicasByBarcode(barcode);
+  return matches[0] ?? null;
+}
+
+async function getTomicasByBarcode(barcode) {
   const normalizedBarcode = normalizeBarcode(barcode);
   const rows = await getAllTomicas();
-  return rows.find((item) => normalizeBarcode(item.barcode) === normalizedBarcode) ?? null;
+  return rows
+    .filter((item) => normalizeBarcode(item.barcode) === normalizedBarcode)
+    .sort((a, b) => String(b.year).localeCompare(String(a.year)) || String(b.updatedAt).localeCompare(String(a.updatedAt)));
 }
 
 async function saveTomica(draft, id = null) {
   const now = new Date().toISOString();
+  const existingSameModel = id ? null : await findTomicaByBarcodeYear(draft.barcode, draft.year);
   const row = {
-    id: id ? Number(id) : undefined,
+    id: id ? Number(id) : existingSameModel?.id,
     barcode: draft.barcode.trim(),
     number: draft.number.trim(),
     name: draft.name.trim(),
@@ -105,11 +121,20 @@ async function saveTomica(draft, id = null) {
     hasSticker: draft.hasSticker ? 1 : 0,
     photoDataUrl: draft.photoDataUrl || '',
     note: draft.note.trim(),
-    createdAt: draft.createdAt || now,
+    createdAt: draft.createdAt || existingSameModel?.createdAt || now,
     updatedAt: now,
   };
 
   await withStore('readwrite', (store) => store.put(row));
+}
+
+async function findTomicaByBarcodeYear(barcode, year) {
+  const normalizedBarcode = normalizeBarcode(barcode);
+  const normalizedYear = String(year ?? '').trim();
+  const rows = await getAllTomicas();
+  return rows.find(
+    (item) => normalizeBarcode(item.barcode) === normalizedBarcode && String(item.year ?? '').trim() === normalizedYear
+  ) ?? null;
 }
 
 async function putTomica(row) {
@@ -145,6 +170,22 @@ function escapeHtml(value) {
 
 function normalizeBarcode(value) {
   return String(value ?? '').replace(/\D/g, '').trim();
+}
+
+function matchesKeyword(item, keyword) {
+  const textKeyword = keyword.trim().toLowerCase();
+  const digitKeyword = normalizeBarcode(keyword);
+  const textFields = [item.name, item.number, item.barcode, item.series, item.year].map((value) =>
+    String(value ?? '').toLowerCase()
+  );
+
+  if (textFields.some((value) => value.includes(textKeyword))) {
+    return true;
+  }
+
+  return Boolean(digitKeyword) && [item.number, item.barcode, item.year].some((value) =>
+    normalizeBarcode(value).includes(digitKeyword)
+  );
 }
 
 function normalizeTomica(raw, fallback = {}) {
@@ -197,7 +238,9 @@ async function importBackup(file) {
   }
 
   const existingItems = await getAllTomicas();
-  const existingByBarcode = new Map(existingItems.map((item) => [item.barcode, item]));
+  const existingByBarcodeYear = new Map(
+    existingItems.map((item) => [`${normalizeBarcode(item.barcode)}::${String(item.year ?? '').trim()}`, item])
+  );
   let importedCount = 0;
   let skippedCount = 0;
 
@@ -208,7 +251,9 @@ async function importBackup(file) {
       continue;
     }
 
-    const existing = existingByBarcode.get(barcode);
+    const existing = existingByBarcodeYear.get(
+      `${normalizeBarcode(barcode)}::${String(incoming.year ?? '').trim()}`
+    );
     const normalized = normalizeTomica(incoming, existing);
     if (!normalized.number || !normalized.name) {
       skippedCount += 1;
@@ -245,14 +290,8 @@ function stopCamera() {
 
 async function refreshList() {
   const all = await getAllTomicas();
-  const keyword = state.query.trim().toLowerCase();
-  state.items = keyword
-    ? all.filter((item) =>
-        [item.name, item.number, item.barcode, item.series].some((value) =>
-          String(value ?? '').toLowerCase().includes(keyword)
-        )
-      )
-    : all;
+  const keyword = state.query.trim();
+  state.items = keyword ? all.filter((item) => matchesKeyword(item, keyword)) : all;
 }
 
 async function navigate(screen, options = {}) {
@@ -260,9 +299,11 @@ async function navigate(screen, options = {}) {
   state.screen = screen;
   state.editingId = options.id ?? null;
   state.barcodeFromScan = options.barcode ?? '';
+  state.formReturnScreen = options.returnTo ?? state.formReturnScreen;
   state.scanStatus = 'idle';
   state.scannedBarcode = '';
   state.scanResult = null;
+  state.scanMatches = [];
   state.scanDbCount = 0;
   state.isResolvingScan = false;
 
@@ -275,6 +316,14 @@ async function navigate(screen, options = {}) {
   }
 
   render();
+}
+
+function openForm(options = {}) {
+  navigate('form', { ...options, returnTo: state.screen });
+}
+
+function goBackFromForm() {
+  navigate(state.formReturnScreen === 'scanner' ? 'scanner' : 'list');
 }
 
 function render() {
@@ -314,7 +363,7 @@ function renderList() {
   `;
   renderCollectionList();
 
-  app.querySelector('[data-action="add"]').addEventListener('click', () => navigate('form'));
+  app.querySelector('[data-action="add"]').addEventListener('click', () => openForm());
   app.querySelector('[data-action="scan"]').addEventListener('click', () => navigate('scanner'));
   app.querySelector('[data-action="export"]').addEventListener('click', exportBackup);
   app.querySelector('[data-action="import"]').addEventListener('click', () => {
@@ -351,7 +400,7 @@ function renderCollectionList() {
     : '<p>目前沒有收藏，先新增或掃描一台 Tomica。</p>';
 
   list.querySelectorAll('[data-edit]').forEach((button) =>
-    button.addEventListener('click', () => navigate('form', { id: button.dataset.edit }))
+    button.addEventListener('click', () => openForm({ id: button.dataset.edit }))
   );
   list.querySelectorAll('[data-delete]').forEach((button) =>
     button.addEventListener('click', async () => {
@@ -385,6 +434,7 @@ function renderForm() {
   const draft = state.draft || emptyDraft();
   app.innerHTML = `
     <main class="app">
+      <button class="back-button" type="button" data-action="form-back">‹</button>
       ${renderHeader(state.editingId ? '編輯收藏' : '新增收藏', '資料只存在這台裝置的瀏覽器')}
       <form class="form" id="tomica-form">
         <section class="field">
@@ -429,7 +479,8 @@ function renderForm() {
     </main>
   `;
 
-  app.querySelector('[data-action="cancel"]').addEventListener('click', () => navigate('list'));
+  app.querySelector('[data-action="form-back"]').addEventListener('click', goBackFromForm);
+  app.querySelector('[data-action="cancel"]').addEventListener('click', goBackFromForm);
   app.querySelector('[data-action="photo"]').addEventListener('click', () => {
     state.screen = 'photo';
     renderPhotoCamera();
@@ -512,7 +563,7 @@ async function renderScanner() {
           <input class="input" id="manual-barcode" inputmode="numeric" />
         </div>
         <div class="toolbar">
-          <button class="button" data-action="continue-scan">繼續掃描</button>
+          <button class="button primary" data-action="add-year">新增不同年份</button>
           <button class="button" data-action="back">返回列表</button>
         </div>
       </section>
@@ -520,8 +571,10 @@ async function renderScanner() {
   `;
 
   app.querySelector('[data-action="back"]').addEventListener('click', () => navigate('list'));
-  app.querySelector('[data-action="continue-scan"]').addEventListener('click', async () => {
-    await restartScanner();
+  app.querySelector('[data-action="add-year"]').addEventListener('click', () => {
+    if (state.scannedBarcode) {
+      openForm({ barcode: state.scannedBarcode });
+    }
   });
   app.querySelector('#manual-barcode').addEventListener('keydown', async (event) => {
     if (event.key === 'Enter') {
@@ -585,7 +638,7 @@ async function startZxingScanner(video) {
         }
 
         const text = result.getText();
-        if (!text || text === state.scannedBarcode) {
+        if (!text) {
           return;
         }
 
@@ -621,8 +674,14 @@ async function handleBarcode(barcode) {
     return;
   }
 
+  const now = Date.now();
+  if (normalizedBarcode === state.scannedBarcode && now - state.lastScanAt < 2500) {
+    return;
+  }
+
   state.isResolvingScan = true;
   state.scannedBarcode = normalizedBarcode;
+  state.lastScanAt = now;
 
   const manualInput = app.querySelector('#manual-barcode');
   if (manualInput) {
@@ -630,19 +689,11 @@ async function handleBarcode(barcode) {
   }
 
   state.scanDbCount = (await getAllTomicas()).length;
-  state.scanResult = await getTomicaByBarcode(normalizedBarcode);
-  state.scanStatus = state.scanDbCount > 0 && state.scanResult ? 'found' : 'missing';
-  renderScanResult();
-}
-
-async function restartScanner() {
-  stopCamera();
-  state.scanStatus = 'idle';
-  state.scannedBarcode = '';
-  state.scanResult = null;
-  state.scanDbCount = 0;
+  state.scanMatches = await getTomicasByBarcode(normalizedBarcode);
+  state.scanResult = state.scanMatches[0] ?? null;
+  state.scanStatus = state.scanMatches.length > 0 ? 'found' : 'missing';
   state.isResolvingScan = false;
-  renderScanner();
+  renderScanResult();
 }
 
 function renderScanResult() {
@@ -650,17 +701,22 @@ function renderScanResult() {
   if (!output) return;
 
   if (state.scanStatus === 'found') {
-    const item = state.scanResult;
     output.innerHTML = `
       <p class="found">已收藏</p>
-      ${item.photoDataUrl ? `<img class="scan-photo" src="${item.photoDataUrl}" alt="${escapeHtml(item.name)}" />` : ''}
-      <h2 class="card-title">${escapeHtml(item.number)} ${escapeHtml(item.name)}</h2>
-      <p class="meta">條碼：${escapeHtml(item.barcode)}</p>
-      <p class="meta">系列：${escapeHtml(item.series || '未填')} / 車貼：${item.hasSticker ? '有' : '無'}</p>
+      <p class="meta">條碼：${escapeHtml(state.scannedBarcode)}</p>
       <p class="meta">目前資料庫：${state.scanDbCount} 筆</p>
-      <button class="button primary full" data-action="edit-found">查看 / 編輯</button>
+      <p class="meta">同條碼已收藏：${state.scanMatches.length} 種年份</p>
+      <div class="scan-match-list">
+        ${state.scanMatches.map(renderScanMatch).join('')}
+      </div>
+      <button class="button primary full" data-action="add-same-barcode-year" type="button">新增不同年份</button>
     `;
-    output.querySelector('[data-action="edit-found"]').addEventListener('click', () => navigate('form', { id: item.id }));
+    output.querySelectorAll('[data-edit-scan]').forEach((button) =>
+      button.addEventListener('click', () => openForm({ id: button.dataset.editScan }))
+    );
+    output.querySelector('[data-action="add-same-barcode-year"]').addEventListener('click', () =>
+      openForm({ barcode: state.scannedBarcode })
+    );
     return;
   }
 
@@ -668,11 +724,23 @@ function renderScanResult() {
     <p class="missing">未收藏</p>
     <p class="meta">條碼：${escapeHtml(state.scannedBarcode)}</p>
     <p class="meta">目前資料庫：${state.scanDbCount} 筆</p>
-    <button class="button primary full" data-action="add-missing" type="button">新增收藏</button>
+    <button class="button primary full" data-action="add-missing" type="button">新增不同年份</button>
   `;
   output.querySelector('[data-action="add-missing"]').addEventListener('click', () =>
-    navigate('form', { barcode: state.scannedBarcode })
+    openForm({ barcode: state.scannedBarcode })
   );
+}
+
+function renderScanMatch(item) {
+  return `
+    <article class="scan-match">
+      ${item.photoDataUrl ? `<img class="scan-photo" src="${item.photoDataUrl}" alt="${escapeHtml(item.name)}" />` : ''}
+      <h2 class="card-title">${escapeHtml(item.number)} ${escapeHtml(item.name)}</h2>
+      <p class="meta">年份：${escapeHtml(item.year || '未填')} / 系列：${escapeHtml(item.series || '未填')}</p>
+      <p class="meta">車貼：${item.hasSticker ? '有' : '無'} / 數量：${item.ownedCount}</p>
+      <button class="button full" data-edit-scan="${item.id}" type="button">查看 / 編輯</button>
+    </article>
+  `;
 }
 
 async function renderPhotoCamera() {
@@ -722,7 +790,7 @@ async function takePhoto() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=6').then((registration) => {
+  navigator.serviceWorker.register('./sw.js?v=8').then((registration) => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }
