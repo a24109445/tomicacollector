@@ -1,7 +1,7 @@
 const DB_NAME = 'TomicaCollectorWeb';
 const DB_VERSION = 3;
 const STORE_NAME = 'tomicas';
-const APP_VERSION = '2026-06-11-zxing-v10';
+const APP_VERSION = '2026-06-11-zxing-v11';
 
 const seriesOptions = [
   '一般紅盒',
@@ -586,7 +586,7 @@ async function renderScanner() {
         </div>
         <form class="field" id="manual-barcode-form">
           <label class="label" for="manual-barcode">手動輸入條碼</label>
-          <input class="input" id="manual-barcode" inputmode="numeric" enterkeyhint="done" />
+          <input class="input" id="manual-barcode" inputmode="numeric" enterkeyhint="enter" />
         </form>
         <button class="button primary full" data-action="add-year">新增收藏/新增不同年份</button>
         <button class="button full" data-action="back">返回列表</button>
@@ -614,11 +614,6 @@ async function renderScanner() {
       if (value) await handleBarcode(value);
     }
   });
-  app.querySelector('#manual-barcode').addEventListener('change', async (event) => {
-    const value = event.currentTarget.value.trim();
-    if (value) await handleBarcode(value);
-  });
-
   await startScanner();
 }
 
@@ -822,7 +817,7 @@ async function takePhoto() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=10').then((registration) => {
+  navigator.serviceWorker.register('./sw.js?v=11').then((registration) => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }
