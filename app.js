@@ -1,7 +1,7 @@
 const DB_NAME = 'TomicaCollectorWeb';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = 'tomicas';
-const APP_VERSION = '2026-06-11-zxing-v8';
+const APP_VERSION = '2026-06-11-zxing-v9';
 
 const seriesOptions = [
   '一般紅盒',
@@ -39,6 +39,7 @@ const state = {
   isResolvingScan: false,
   lastScanAt: 0,
   formReturnScreen: 'list',
+  totalValue: 0,
 };
 
 const app = document.querySelector('#app');
@@ -118,6 +119,7 @@ async function saveTomica(draft, id = null) {
     series: draft.series.trim(),
     year: draft.year.trim(),
     ownedCount: Number(draft.ownedCount) || 1,
+    price: parsePrice(draft.price),
     hasSticker: draft.hasSticker ? 1 : 0,
     photoDataUrl: draft.photoDataUrl || '',
     note: draft.note.trim(),
@@ -153,6 +155,7 @@ function emptyDraft(barcode = '') {
     series: '',
     year: '',
     ownedCount: 1,
+    price: '',
     hasSticker: 0,
     photoDataUrl: '',
     note: '',
@@ -170,6 +173,15 @@ function escapeHtml(value) {
 
 function normalizeBarcode(value) {
   return String(value ?? '').replace(/\D/g, '').trim();
+}
+
+function parsePrice(value) {
+  const amount = Number(String(value ?? '').replace(/,/g, '').trim());
+  return Number.isFinite(amount) && amount > 0 ? Math.round(amount) : 0;
+}
+
+function formatCurrency(value) {
+  return `NT$ ${parsePrice(value).toLocaleString('zh-TW')}`;
 }
 
 function matchesKeyword(item, keyword) {
@@ -198,6 +210,7 @@ function normalizeTomica(raw, fallback = {}) {
     series: String(raw.series ?? fallback.series ?? '').trim(),
     year: String(raw.year ?? fallback.year ?? '').trim(),
     ownedCount: Math.min(5, Math.max(1, Number(raw.ownedCount ?? fallback.ownedCount) || 1)),
+    price: parsePrice(raw.price ?? fallback.price),
     hasSticker: raw.hasSticker ? 1 : 0,
     photoDataUrl: String(raw.photoDataUrl ?? fallback.photoDataUrl ?? ''),
     note: String(raw.note ?? fallback.note ?? '').trim(),
@@ -291,6 +304,7 @@ function stopCamera() {
 async function refreshList() {
   const all = await getAllTomicas();
   const keyword = state.query.trim();
+  state.totalValue = all.reduce((sum, item) => sum + parsePrice(item.price) * (Number(item.ownedCount) || 1), 0);
   state.items = keyword ? all.filter((item) => matchesKeyword(item, keyword)) : all;
 }
 
@@ -337,7 +351,7 @@ function renderHeader(title, subtitle) {
   return `
     <header class="header">
       <h1 class="title">${title}</h1>
-      <p class="subtitle">${subtitle}</p>
+      ${subtitle ? `<p class="subtitle">${subtitle}</p>` : ''}
     </header>
   `;
 }
@@ -345,9 +359,9 @@ function renderHeader(title, subtitle) {
 function renderList() {
   app.innerHTML = `
     <main class="app">
-      ${renderHeader('TomicaCollector', '網頁版，本機 IndexedDB 收藏管理')}
+      ${renderHeader('TomicaCollector', '')}
       <p class="version">版本：${APP_VERSION}</p>
-      <p class="help">純離線資料存在目前開啟方式的本機資料庫。Safari 網頁版與加入主畫面的 PWA 可能是不同資料庫，請以主畫面版為主，或用匯出/匯入備份搬移資料。</p>
+      <p class="help">版本更新時請先匯出備份，更新完後再匯入備份。</p>
       <div class="toolbar">
         <button class="button primary" data-action="add">新增收藏</button>
         <button class="button" data-action="scan">掃描條碼</button>
@@ -358,6 +372,10 @@ function renderList() {
       </div>
       <input class="hidden" id="backup-file" type="file" accept="application/json,.json" />
       <input class="search" id="search" value="${escapeHtml(state.query)}" placeholder="搜尋車名、編號、條碼、系列" />
+      <section class="total-value">
+        <span>收藏總價值</span>
+        <strong>${formatCurrency(state.totalValue)}</strong>
+      </section>
       <section id="collection-list"></section>
     </main>
   `;
@@ -420,7 +438,7 @@ function renderCard(item) {
       <h2 class="card-title">${escapeHtml(item.number)} ${escapeHtml(item.name)}</h2>
       <p class="meta">條碼：${escapeHtml(item.barcode)}</p>
       <p class="meta">系列：${escapeHtml(item.series || '未填')} / 年份：${escapeHtml(item.year || '未填')}</p>
-      <p class="meta">車貼：${item.hasSticker ? '有' : '無'} / 數量：${item.ownedCount}</p>
+      <p class="meta">車貼：${item.hasSticker ? '有' : '無'} / 數量：${item.ownedCount} / 金額：${formatCurrency(item.price)}</p>
       ${item.note ? `<p class="note">${escapeHtml(item.note)}</p>` : ''}
       <div class="actions">
         <button class="small-button" data-edit="${item.id}">編輯</button>
@@ -463,6 +481,7 @@ function renderForm() {
         </div>
         ${field('year', '年份', draft.year, 'text', 'numeric')}
         ${selectField('ownedCount', '持有數量', String(draft.ownedCount), ownedCountOptions)}
+        ${field('price', '金額', draft.price, 'number', 'decimal')}
         <label class="checkbox">
           <input id="hasSticker" type="checkbox" ${draft.hasSticker ? 'checked' : ''} />
           是否有車貼
@@ -505,6 +524,7 @@ function renderForm() {
       series,
       year: form.year.value,
       ownedCount: form.ownedCount.value,
+      price: form.price.value,
       hasSticker: form.hasSticker.checked ? 1 : 0,
       note: form.note.value,
     };
@@ -558,12 +578,13 @@ async function renderScanner() {
         <div id="scan-output" class="scan-result">
           <p class="help">掃描結果會顯示在這裡。掃到條碼後會自動比對收藏資料。</p>
         </div>
-        <div class="field">
+        <form class="field" id="manual-barcode-form">
           <label class="label" for="manual-barcode">手動輸入條碼</label>
-          <input class="input" id="manual-barcode" inputmode="numeric" />
-        </div>
+          <input class="input" id="manual-barcode" inputmode="numeric" enterkeyhint="done" />
+          <button class="button full" type="submit">查詢條碼</button>
+        </form>
         <div class="toolbar">
-          <button class="button primary" data-action="add-year">新增不同年份</button>
+          <button class="button primary" data-action="add-year">新增收藏/新增不同年份</button>
           <button class="button" data-action="back">返回列表</button>
         </div>
       </section>
@@ -574,14 +595,18 @@ async function renderScanner() {
   app.querySelector('[data-action="add-year"]').addEventListener('click', () => {
     if (state.scannedBarcode) {
       openForm({ barcode: state.scannedBarcode });
+    } else {
+      openForm();
     }
   });
-  app.querySelector('#manual-barcode').addEventListener('keydown', async (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      const value = event.currentTarget.value.trim();
-      if (value) await handleBarcode(value);
-    }
+  app.querySelector('#manual-barcode-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const value = app.querySelector('#manual-barcode').value.trim();
+    if (value) await handleBarcode(value);
+  });
+  app.querySelector('#manual-barcode').addEventListener('change', async (event) => {
+    const value = event.currentTarget.value.trim();
+    if (value) await handleBarcode(value);
   });
 
   await startScanner();
@@ -714,13 +739,9 @@ function renderScanResult() {
       <div class="scan-match-list">
         ${state.scanMatches.map(renderScanMatch).join('')}
       </div>
-      <button class="button primary full" data-action="add-same-barcode-year" type="button">新增不同年份</button>
     `;
     output.querySelectorAll('[data-edit-scan]').forEach((button) =>
       button.addEventListener('click', () => openForm({ id: button.dataset.editScan }))
-    );
-    output.querySelector('[data-action="add-same-barcode-year"]').addEventListener('click', () =>
-      openForm({ barcode: state.scannedBarcode })
     );
     return;
   }
@@ -729,11 +750,7 @@ function renderScanResult() {
     <p class="missing">未收藏</p>
     <p class="meta">條碼：${escapeHtml(state.scannedBarcode)}</p>
     <p class="meta">目前資料庫：${state.scanDbCount} 筆</p>
-    <button class="button primary full" data-action="add-missing" type="button">新增不同年份</button>
   `;
-  output.querySelector('[data-action="add-missing"]').addEventListener('click', () =>
-    openForm({ barcode: state.scannedBarcode })
-  );
 }
 
 function renderScanMatch(item) {
@@ -742,7 +759,7 @@ function renderScanMatch(item) {
       ${item.photoDataUrl ? `<img class="scan-photo" src="${item.photoDataUrl}" alt="${escapeHtml(item.name)}" />` : ''}
       <h2 class="card-title">${escapeHtml(item.number)} ${escapeHtml(item.name)}</h2>
       <p class="meta">年份：${escapeHtml(item.year || '未填')} / 系列：${escapeHtml(item.series || '未填')}</p>
-      <p class="meta">車貼：${item.hasSticker ? '有' : '無'} / 數量：${item.ownedCount}</p>
+      <p class="meta">車貼：${item.hasSticker ? '有' : '無'} / 數量：${item.ownedCount} / 金額：${formatCurrency(item.price)}</p>
       <button class="button full" data-edit-scan="${item.id}" type="button">查看 / 編輯</button>
     </article>
   `;
@@ -795,7 +812,7 @@ async function takePhoto() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=8').then((registration) => {
+  navigator.serviceWorker.register('./sw.js?v=9').then((registration) => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }

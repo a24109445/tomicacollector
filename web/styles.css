@@ -134,6 +134,25 @@ button {
   margin-bottom: 12px;
 }
 
+.total-value {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.total-value strong {
+  color: var(--text);
+  font-size: 22px;
+}
+
 .textarea {
   min-height: 94px;
   resize: vertical;

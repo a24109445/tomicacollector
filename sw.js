@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tomicacollector-web-v8';
+const CACHE_NAME = 'tomicacollector-web-v9';
 const ASSETS = [
   './',
   './index.html',

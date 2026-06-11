@@ -34,7 +34,7 @@
   <body>
     <main>
       <h1>TomicaCollector 更新中</h1>
-      <p>正在清除舊版離線快取，完成後會自動進入新版。</p>
+      <p>正在清除舊版快取，完成後會自動回到最新版。</p>
     </main>
     <script>
       async function refreshApp() {
@@ -48,11 +48,11 @@
           await Promise.all(names.map((name) => caches.delete(name)));
         }
 
-        window.location.replace('./index.html?fresh=20260611-zxing-v8');
+        window.location.replace('./index.html?fresh=20260611-zxing-v9');
       }
 
       refreshApp().catch(() => {
-        window.location.replace('./index.html?fresh=20260611-zxing-v8');
+        window.location.replace('./index.html?fresh=20260611-zxing-v9');
       });
     </script>
   </body>
