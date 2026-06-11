@@ -1,7 +1,7 @@
 const DB_NAME = 'TomicaCollectorWeb';
 const DB_VERSION = 3;
 const STORE_NAME = 'tomicas';
-const APP_VERSION = '2026-06-11-zxing-v9';
+const APP_VERSION = '2026-06-11-zxing-v10';
 
 const seriesOptions = [
   '一般紅盒',
@@ -336,6 +336,12 @@ function openForm(options = {}) {
   navigate('form', { ...options, returnTo: state.screen });
 }
 
+async function openFormPhoto(options = {}) {
+  await navigate('form', { ...options, returnTo: state.screen });
+  state.screen = 'photo';
+  renderPhotoCamera();
+}
+
 function goBackFromForm() {
   navigate(state.formReturnScreen === 'scanner' ? 'scanner' : 'list');
 }
@@ -581,28 +587,32 @@ async function renderScanner() {
         <form class="field" id="manual-barcode-form">
           <label class="label" for="manual-barcode">手動輸入條碼</label>
           <input class="input" id="manual-barcode" inputmode="numeric" enterkeyhint="done" />
-          <button class="button full" type="submit">查詢條碼</button>
         </form>
-        <div class="toolbar">
-          <button class="button primary" data-action="add-year">新增收藏/新增不同年份</button>
-          <button class="button" data-action="back">返回列表</button>
-        </div>
+        <button class="button primary full" data-action="add-year">新增收藏/新增不同年份</button>
+        <button class="button full" data-action="back">返回列表</button>
       </section>
     </main>
   `;
 
   app.querySelector('[data-action="back"]').addEventListener('click', () => navigate('list'));
-  app.querySelector('[data-action="add-year"]').addEventListener('click', () => {
+  app.querySelector('[data-action="add-year"]').addEventListener('click', async () => {
     if (state.scannedBarcode) {
-      openForm({ barcode: state.scannedBarcode });
+      await openFormPhoto({ barcode: state.scannedBarcode });
     } else {
-      openForm();
+      await openFormPhoto();
     }
   });
   app.querySelector('#manual-barcode-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const value = app.querySelector('#manual-barcode').value.trim();
     if (value) await handleBarcode(value);
+  });
+  app.querySelector('#manual-barcode').addEventListener('keydown', async (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const value = event.currentTarget.value.trim();
+      if (value) await handleBarcode(value);
+    }
   });
   app.querySelector('#manual-barcode').addEventListener('change', async (event) => {
     const value = event.currentTarget.value.trim();
@@ -812,7 +822,7 @@ async function takePhoto() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=9').then((registration) => {
+  navigator.serviceWorker.register('./sw.js?v=10').then((registration) => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }

@@ -116,6 +116,10 @@ button {
   flex: 0 0 auto;
 }
 
+.button.full + .button.full {
+  margin-top: 10px;
+}
+
 .search,
 .input,
 .select,
