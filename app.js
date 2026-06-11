@@ -1,7 +1,7 @@
 const DB_NAME = 'TomicaCollectorWeb';
 const DB_VERSION = 3;
 const STORE_NAME = 'tomicas';
-const APP_VERSION = '2026-06-11-zxing-v11';
+const APP_VERSION = '2026-06-11-zxing-v12';
 
 const seriesOptions = [
   '一般紅盒',
@@ -172,7 +172,17 @@ function escapeHtml(value) {
 }
 
 function normalizeBarcode(value) {
-  return String(value ?? '').replace(/\D/g, '').trim();
+  return normalizeFullWidth(value).replace(/\D/g, '').trim();
+}
+
+function normalizeFullWidth(value) {
+  return String(value ?? '').replace(/[！-～]/g, (char) =>
+    String.fromCharCode(char.charCodeAt(0) - 0xfee0)
+  );
+}
+
+function normalizeSearchText(value) {
+  return normalizeFullWidth(value).toLowerCase().replace(/\s+/g, '');
 }
 
 function parsePrice(value) {
@@ -185,19 +195,18 @@ function formatCurrency(value) {
 }
 
 function matchesKeyword(item, keyword) {
-  const textKeyword = keyword.trim().toLowerCase();
+  const textKeyword = normalizeSearchText(keyword);
   const digitKeyword = normalizeBarcode(keyword);
-  const textFields = [item.name, item.number, item.barcode, item.series, item.year].map((value) =>
-    String(value ?? '').toLowerCase()
+  const textFields = [item.number, item.name, item.barcode, item.series].map((value) =>
+    normalizeSearchText(value)
   );
+  const digitFields = [item.number, item.barcode].map((value) => normalizeBarcode(value));
 
-  if (textFields.some((value) => value.includes(textKeyword))) {
+  if (textKeyword && textFields.some((value) => value.includes(textKeyword))) {
     return true;
   }
 
-  return Boolean(digitKeyword) && [item.number, item.barcode, item.year].some((value) =>
-    normalizeBarcode(value).includes(digitKeyword)
-  );
+  return Boolean(digitKeyword) && digitFields.some((value) => value.includes(digitKeyword));
 }
 
 function normalizeTomica(raw, fallback = {}) {
@@ -578,6 +587,7 @@ function isCustomSeries(series) {
 async function renderScanner() {
   app.innerHTML = `
     <main class="camera-screen">
+      <button class="camera-back-button" type="button" data-action="scan-back">‹</button>
       <video class="camera-video" id="scan-video" autoplay muted playsinline></video>
       <section class="camera-panel">
         <h1 class="card-title">對準 Tomica 外盒條碼</h1>
@@ -594,6 +604,7 @@ async function renderScanner() {
     </main>
   `;
 
+  app.querySelector('[data-action="scan-back"]').addEventListener('click', () => navigate('list'));
   app.querySelector('[data-action="back"]').addEventListener('click', () => navigate('list'));
   app.querySelector('[data-action="add-year"]').addEventListener('click', async () => {
     if (state.scannedBarcode) {
@@ -817,7 +828,7 @@ async function takePhoto() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=11').then((registration) => {
+  navigator.serviceWorker.register('./sw.js?v=12').then((registration) => {
     registration.update().catch(() => {});
   }).catch(() => {});
 }
